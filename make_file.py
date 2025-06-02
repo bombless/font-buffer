@@ -18,6 +18,31 @@ def cjk_char_to_c_framebuffer(char):
     if len(char) != 1:
         raise ValueError("输入必须是单个字符")
 
+    def get_consolas_font_path():
+        if platform.system() != "Windows":
+            # 非Windows系统的备用字体路径
+            fallback_paths = [
+                "/System/Library/Fonts/STSong.ttc",  # macOS
+                "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",  # Linux
+                "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"  # Linux备用
+            ]
+            for path in fallback_paths:
+                if os.path.exists(path):
+                    return path
+            return None
+
+        # Windows系统宋体路径
+        font_paths = [
+            "C:\Windows\Fonts\consola.ttf",
+            "C:/Windows/Fonts/simsun.ttc",
+            "C:/Windows/Fonts/SimSun.ttf",
+            "C:/Windows/Fonts/simhei.ttf"  # 备用黑体
+        ]
+
+        for path in font_paths:
+            if os.path.exists(path):
+                return path
+        return None
     # 获取Windows系统中的宋体字体路径
     def get_simsun_font_path():
         if platform.system() != "Windows":
@@ -46,13 +71,18 @@ def cjk_char_to_c_framebuffer(char):
 
     # 获取字体
     font_path = get_simsun_font_path()
+    digits_font_path = get_consolas_font_path()
     if font_path is None:
         raise FileNotFoundError("未找到合适的中文字体文件")
 
     try:
         # 尝试不同的字体大小，确保字符能够适合16x16像素
         font_size = 14
-        font = ImageFont.truetype(font_path, font_size)
+        if ord(char) < 128:
+            font = ImageFont.truetype(digits_font_path, font_size)
+        else:
+
+            font = ImageFont.truetype(font_path, font_size)
     except Exception as e:
         raise Exception(f"无法加载字体文件: {e}")
 
@@ -86,7 +116,7 @@ def cjk_char_to_c_framebuffer(char):
         for j in range(16):  # 16列
             pixel_value = pixels[i * 16 + j]
             if pixel_value < 128:  # 黑色像素
-                row_data |= (1 << (15 - j))  # 从左到右，高位到低位
+                row_data |= (1 << j)  # 从左到右，高位到低位
         binary_data.append(row_data)
     return binary_data
 
@@ -113,7 +143,7 @@ const uint16_t* character_get_bitmap(uint16_t character) {
             c_code += f"  // 行 {i + 1:2d}: "
             # 添加可视化注释
             for j in range(16):
-                if row & (1 << (15 - j)):
+                if row & (1 << j):
                     c_code += "█"
                 else:
                     c_code += "·"
@@ -133,7 +163,7 @@ const uint16_t* character_get_bitmap(uint16_t character) {
 # 使用示例
 if __name__ == "__main__":
     try:
-        text = "中华人民共和国中央人民政府今天成立了！"
+        text = "中华人民共和国中央人民政府今天成立了！0123456789."
         lst = []
         s = set()
         for char in text:
